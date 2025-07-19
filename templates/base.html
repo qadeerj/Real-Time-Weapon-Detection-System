@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Weapon Detection System{% endblock %}</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+</head>
+<body>
+    {% block header %}
+    <header>
+      <div class="header-flex">
+        <div class="header-title-left">
+          <h1>Real-Time Weapon Detection</h1>
+        </div>
+        <div class="header-title-right" style="display:flex; gap:0.5rem; align-items:center;">
+          {% block header_right %}
+            {% if request.path != '/' %}
+              <a href="/" class="back-home-btn">
+                <i class="fas fa-home"></i> Back to Home
+              </a>
+            {% endif %}
+            {% if request.path == '/history' %}
+              <span class="history-link" style="cursor:default; background:none; border:none; color:#f55;">
+                <i class="fas fa-history"></i> Detection History
+              </span>
+            {% else %}
+              <a href="/history" class="history-link">
+                <i class="fas fa-history"></i> Detection History
+              </a>
+            {% endif %}
+            {% if session.get('username') %}
+              <span class="user-welcome" style="color:#f55; font-weight:600; margin-left:1.2rem;">Welcome, {{ session['username'] }}</span>
+              <a href="{{ url_for('index') }}" class="header-link">Home</a>
+              <a href="{{ url_for('change_password') }}" class="header-link">Change Password</a>
+              <a href="{{ url_for('logout') }}" class="header-link">Logout</a>
+            {% else %}
+              <a href="{{ url_for('login') }}" class="header-link">Login</a>
+            {% endif %}
+          {% endblock %}
+        </div>
+      </div>
+    </header>
+    {% endblock %}
+
+    <main class="main-content">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer>
+        <p>© 2025 Yousaf. All rights reserved.</p>
+    </footer>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html> 

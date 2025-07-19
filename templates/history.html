@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+
+{% block title %}Detection History{% endblock %}
+
+{% block content %}
+<div class="history-container">
+    <div id="history-grid" class="history-grid">
+        <div class="loading">Loading detection history...</div>
+    </div>
+    <div style="text-align:center; margin-top:2.5rem;">
+        <button id="download-all-btn" class="download-all-btn" style="display:none;">
+            <i class="fas fa-download"></i> Download All Screenshots
+        </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const grid = document.getElementById('history-grid');
+    const downloadBtn = document.getElementById('download-all-btn');
+    fetch('/api/get_screenshots')
+        .then(res => res.json())
+        .then(data => {
+            if (!data.length) {
+                grid.innerHTML = '<div class="no-detections">No detections found.</div>';
+                if (downloadBtn) downloadBtn.style.display = 'none';
+                return;
+            }
+            grid.innerHTML = data.map(item => `
+                <div class="history-item">
+                    <a href="${item.url}" target="_blank">
+                        <img src="${item.url}" alt="Detection Screenshot">
+                    </a>
+                    <div class="history-meta">
+                        <span class="history-date">${item.timestamp}</span>
+                    </div>
+                </div>
+            `).join('');
+            if (downloadBtn) downloadBtn.style.display = 'inline-block';
+        });
+    if (downloadBtn) {
+        downloadBtn.addEventListener('click', function() {
+            window.location.href = '/api/download_all_screenshots';
+        });
+    }
+});
+</script>
+<style>
+.download-all-btn {
+    background: #f55;
+    color: #fff;
+    font-weight: 600;
+    padding: 0.7rem 1.5rem;
+    border-radius: 0.5rem;
+    border: none;
+    font-size: 1.08rem;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.10);
+    cursor: pointer;
+    transition: background 0.18s, color 0.18s;
+    margin-top: 1.5rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.download-all-btn i {
+    font-size: 1.1em;
+}
+.download-all-btn:hover {
+    background: #d44;
+    color: #fff;
+}
+
+.history-container {
+    max-width: 900px;
+    margin: 2.5rem auto 2.5rem auto;
+    padding: 2.5rem 1.5rem 2.5rem 1.5rem;
+    background: #181818;
+    border-radius: 1rem;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+}
+
+.history-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 2rem 1.5rem;
+    margin-top: 1.5rem;
+}
+@media (max-width: 1100px) {
+  .history-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 700px) {
+  .history-container {
+    padding: 1.2rem 0.5rem;
+    border-radius: 0.5rem;
+  }
+  .history-grid {
+    grid-template-columns: 1fr;
+    gap: 1.2rem 0.5rem;
+  }
+  .history-item {
+    padding: 0.7rem 0.3rem 0.7rem 0.3rem;
+  }
+  .history-item img {
+    max-height: 120px;
+  }
+}
+
+.history-item {
+    background: #222;
+    border-radius: 0.75rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.10);
+    padding: 1.2rem 1rem 1rem 1rem;
+    text-align: center;
+    transition: box-shadow 0.2s, transform 0.18s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+.history-item:hover {
+    box-shadow: 0 4px 16px #f55, 0 2px 8px rgba(0,0,0,0.18);
+    transform: translateY(-2px) scale(1.025);
+}
+.history-item img {
+    max-width: 100%;
+    max-height: 180px;
+    border-radius: 0.5rem;
+    margin-bottom: 0.75rem;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.15);
+    cursor: pointer;
+    transition: transform 0.2s;
+    background: #111;
+}
+.history-item img:hover {
+    transform: scale(1.04);
+}
+.history-meta {
+    color: #aaa;
+    font-size: 0.98rem;
+    margin-bottom: 0.2rem;
+}
+.no-detections, .loading {
+    color: #888;
+    text-align: center;
+    grid-column: 1/-1;
+    padding: 2rem 0;
+}
+</style>
+{% endblock %} 

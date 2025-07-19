@@ -1,0 +1,316 @@
+{% extends "base.html" %}
+
+{% block title %}Weapon Detector{% endblock %}
+
+{% block header %}
+{{ super() }}
+<header id="live-header" style="display:none;">
+  <div class="header-flex">
+    <div class="header-title-left">
+      <h1>Live Detection</h1>
+    </div>
+    <div class="header-title-right">
+      <a href="{{ url_for('history') }}" class="history-link">Detection History</a>
+      <button id="btn-stop-header" type="button" class="header-link" style="background:#f55; color:#fff; border:none; cursor:pointer;">Stop Detection</button>
+    </div>
+  </div>
+</header>
+{% endblock %}
+
+{% block content %}
+<section class="container">
+  <div class="left-panel">
+    <button id="btn-live">Start Detection</button>
+    <form id="upload-form" action="/upload_video" method="post" enctype="multipart/form-data">
+      <input type="file" name="video" accept="video/*">
+      <button type="submit">Upload Video</button>
+    </form>
+    <div id="upload-loading-bar" class="upload-loading-bar" style="display:none;"></div>
+    <span id="upload-progress-text" style="display:none; color:#fbbf24; font-weight:600; margin-top:0.5rem; font-size:1.05rem;"></span>
+    <div id="download-link">
+      {% with messages = get_flashed_messages() %}
+        {% if messages %}
+          <p class="error">{{ messages[0] }}</p>
+        {% endif %}
+      {% endwith %}
+      {% if request.path.startswith('/download') %}
+        <!-- Handled via redirect -->
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="right-panel" style="width:100%; max-width:none;">
+    <img id="animated-img" src="{{ url_for('static', filename='images/gun.png') }}" alt="Person with gun">
+    <div id="video-stream" style="display:none;">
+      <div class="multi-cam-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; width:100vw; height:100vh; margin:0; padding:0;">
+        {% for i in range(1, 21) %}
+          <div class="cam-cell" id="cam-cell-{{i}}" style="width:100%; height:24vw; min-height:24vh; max-height:25vh; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#181818; border-radius:1rem;">
+            <img id="video-feed-img-{{i}}" src="" style="width:100%; height:100%; border-radius:1rem; border:2px solid #333; object-fit:cover; display:none;" alt="Live Detection Camera {{i}}">
+            <div class="cam-placeholder" id="placeholder{{i}}" style="width:100%; height:100%; background:#222; border-radius:1rem; border:2px solid #333; display:flex; align-items:center; justify-content:center; color:#888; font-size:1.3rem;">No Stream</div>
+            <div class="cam-label" style="margin-top:0.5rem; color:#fff; font-weight:600;">Camera {{i}}</div>
+          </div>
+        {% endfor %}
+      </div>
+      <button id="test-highlight-btn" style="margin:1rem auto;display:none;">Test Highlight Camera 1</button>
+    </div>
+  </div>
+</section>
+<audio id="alert-audio" src="/static/Alert/alert-33762.mp3" preload="auto" style="display:none;"></audio>
+<!-- Detection alert popup -->
+<div id="detection-popup" style="display:none; position:fixed; top:30px; left:50%; transform:translateX(-50%); background:#f55; color:#fff; font-size:1.5rem; font-weight:700; padding:1rem 2.5rem; border-radius:0.7rem; box-shadow:0 4px 24px rgba(0,0,0,0.18); z-index:9999; text-align:center; letter-spacing:1px;"></div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+.cam-cell.highlighted {
+  z-index: 10;
+  transform: scale(1.25);
+  box-shadow: 0 0 30px #f55, 0 0 10px #fff;
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+.multi-cam-grid {
+  width: 100vw !important;
+  height: 100vh !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  grid-template-columns: repeat(4, 1fr) !important;
+  gap: 1.5rem !important;
+}
+.cam-cell {
+  width: 100% !important;
+  height: 24vw !important;
+  min-height: 24vh !important;
+  max-height: 25vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: #181818 !important;
+  border-radius: 1rem !important;
+}
+.cam-cell img, .cam-placeholder {
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 1rem !important;
+  object-fit: cover !important;
+}
+.cam-label {
+  margin-top: 0.5rem !important;
+  color: #fff !important;
+  font-weight: 600 !important;
+  font-size: 1.1rem !important;
+}
+@media (max-width: 1200px) {
+  .multi-cam-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .cam-cell {
+    height: 48vw !important;
+    min-height: 30vh !important;
+    max-height: 40vh !important;
+  }
+}
+@media (max-width: 800px) {
+  .multi-cam-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .cam-cell {
+    height: 60vw !important;
+    min-height: 30vh !important;
+    max-height: 50vh !important;
+  }
+}
+</style>
+<script src="{{ url_for('static', filename='js/script.js') }}"></script>
+<script>
+// Camera URLs/indexes for 20 screens
+const cameraUrls = Array.from({length: 20}, (_, i) => i);
+// Create a variable for each camera for easy access
+const cameras = {};
+for (let i = 1; i <= 20; i++) {
+  cameras['cam' + i] = {
+    index: i,
+    getImg: () => document.getElementById('video-feed-img-' + i),
+    getPlaceholder: () => document.getElementById('placeholder' + i),
+    getCell: () => document.getElementById('cam-cell-' + i)
+  };
+}
+// Now you can use cameras.cam1, cameras.cam2, ..., cameras.cam20 and pass their index as needed
+
+// Toggle custom live header and hide default header
+const videoStream = document.getElementById('video-stream');
+const liveHeader = document.getElementById('live-header');
+const btnStop = document.getElementById('btn-stop');
+const btnLive = document.getElementById('btn-live');
+const defaultHeader = document.querySelector('body > header');
+
+function showLiveHeader(show) {
+  if (liveHeader) liveHeader.style.display = show ? 'block' : 'none';
+  if (defaultHeader) defaultHeader.style.display = show ? 'none' : 'block';
+}
+if (btnLive) {
+  btnLive.addEventListener('click', function() {
+    showLiveHeader(true);
+  });
+}
+if (btnStop) {
+  btnStop.addEventListener('click', function() {
+    showLiveHeader(false);
+  });
+}
+// Add stop camera on Home link click in live header
+const liveHomeLink = document.querySelector('#live-header .header-link[href="/"]');
+if (liveHomeLink) {
+  liveHomeLink.addEventListener('click', function(e) {
+    fetch('/stop_video');
+  });
+}
+// Show webcam/stream in assigned video elements only
+async function startAllCameras() {
+  for (let i = 0; i < 20; i++) {
+    const url = cameraUrls[i];
+    const video = document.getElementById('webcam'+(i+1));
+    const placeholder = document.getElementById('placeholder'+(i+1));
+    if (url !== null && video) {
+      try {
+        let stream;
+        if (typeof url === 'number') {
+          stream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: undefined, facingMode: 'user' }, audio: false });
+        } else {
+          // For RTSP/HTTP/other URLs, browser support is limited; placeholder for future
+          // You may need a backend relay for non-local streams
+          stream = null;
+        }
+        if (stream) {
+          video.srcObject = stream;
+          video.style.display = 'block';
+          if (placeholder) placeholder.style.display = 'none';
+        }
+      } catch (err) {
+        if (placeholder) placeholder.innerText = 'Error';
+      }
+    } else {
+      if (video) video.style.display = 'none';
+      if (placeholder) placeholder.style.display = 'flex';
+    }
+  }
+}
+if (btnLive) {
+  btnLive.addEventListener('click', function() {
+    setTimeout(startAllCameras, 500);
+  });
+}
+
+// Play alert sound for 10 seconds
+function playAlertSound() {
+  const audio = document.getElementById('alert-audio');
+  if (audio) {
+    audio.currentTime = 0;
+    audio.play();
+    setTimeout(() => {
+      audio.pause();
+      audio.currentTime = 0;
+    }, 10000);
+  }
+}
+// Modify highlightCamera to also play the alert sound
+function highlightCamera(index) {
+  const cell = document.getElementById('cam-cell-' + index);
+  if (cell) {
+    cell.classList.add('highlighted');
+    playAlertSound();
+    setTimeout(() => {
+      cell.classList.remove('highlighted');
+    }, 10000);
+  }
+}
+// Show test button only in live mode
+const testBtn = document.getElementById('test-highlight-btn');
+if (btnLive && testBtn) {
+  btnLive.addEventListener('click', function() {
+    setTimeout(() => { testBtn.style.display = 'block'; }, 800);
+  });
+}
+if (btnStop && testBtn) {
+  btnStop.addEventListener('click', function() {
+    testBtn.style.display = 'none';
+  });
+}
+if (testBtn) {
+  testBtn.onclick = function() {
+    highlightCamera(1); // Test: highlight Camera 1
+  };
+}
+
+// Poll backend for detection highlight
+let highlightPoll = null;
+if (localStorage.getItem('camera_should_start') !== 'no') {
+  highlightPoll = setInterval(function() {
+    fetch('/api/trigger_highlight')
+      .then(res => res.json())
+      .then(data => {
+        if (data.camera) {
+          highlightCamera(data.camera);
+        }
+      });
+  }, 2000);
+} else {
+  localStorage.removeItem('camera_should_start');
+}
+
+if (btnStop) {
+  btnStop.addEventListener('click', function() {
+    showLiveHeader(false);
+    const videoFeedImg = document.getElementById('video-feed-img');
+    if (videoFeedImg) videoFeedImg.src = '';
+    if (highlightPoll) {
+      clearInterval(highlightPoll);
+      highlightPoll = null;
+    }
+  });
+}
+
+if (liveHomeLink) {
+  liveHomeLink.addEventListener('click', function(e) {
+    fetch('/stop_video');
+    const videoFeedImg = document.getElementById('video-feed-img');
+    if (videoFeedImg) videoFeedImg.src = '';
+    localStorage.setItem('camera_should_start', 'no');
+    if (highlightPoll) {
+      clearInterval(highlightPoll);
+      highlightPoll = null;
+    }
+  });
+}
+const btnStopHeader = document.getElementById('btn-stop-header');
+if (btnStopHeader) {
+  btnStopHeader.addEventListener('click', function(e) {
+    fetch('/stop_video');
+    const videoFeedImg = document.getElementById('video-feed-img');
+    if (videoFeedImg) videoFeedImg.src = '';
+    localStorage.setItem('camera_should_start', 'no');
+    if (highlightPoll) {
+      clearInterval(highlightPoll);
+      highlightPoll = null;
+    }
+    window.location.href = '/';
+  });
+}
+
+// Update Home link logic for new 'Go to Home' link
+const goHomeLink = document.getElementById('go-home-link');
+if (goHomeLink) {
+  goHomeLink.addEventListener('click', function(e) {
+    fetch('/stop_video');
+    const videoFeedImg = document.getElementById('video-feed-img');
+    if (videoFeedImg) videoFeedImg.src = '';
+    localStorage.setItem('camera_should_start', 'no');
+    if (highlightPoll) {
+      clearInterval(highlightPoll);
+      highlightPoll = null;
+    }
+    // Allow navigation to home
+  });
+}
+</script>
+{% endblock %}
